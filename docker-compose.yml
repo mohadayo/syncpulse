@@ -1,0 +1,57 @@
+services:
+  aggregator:
+    build:
+      context: ./services/aggregator
+    ports:
+      - "${AGGREGATOR_PORT:-8001}:8001"
+    environment:
+      - AGGREGATOR_PORT=8001
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+
+  collector:
+    build:
+      context: ./services/collector
+    ports:
+      - "${COLLECTOR_PORT:-8002}:8002"
+    environment:
+      - COLLECTOR_PORT=8002
+      - AGGREGATOR_URL=http://aggregator:8001
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    depends_on:
+      aggregator:
+        condition: service_healthy
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: ./services/dashboard
+    ports:
+      - "${DASHBOARD_PORT:-8003}:8003"
+    environment:
+      - DASHBOARD_PORT=8003
+      - AGGREGATOR_URL=http://aggregator:8001
+      - COLLECTOR_URL=http://collector:8002
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8003/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    depends_on:
+      aggregator:
+        condition: service_healthy
+      collector:
+        condition: service_healthy
+    restart: unless-stopped
